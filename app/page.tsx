@@ -1,101 +1,222 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import useDebounce from "../hooks/useDebounce";
+import {
+  fetchCharactersRes,
+  searchCharacters,
+} from "../api/characterService/characterService";
+import { SkeletonCard } from "@/components/appComponents/common/SkeletonCard";
+import CharacterCard from "@/components/appComponents/common/CharacterCard";
+import { useFavoritesStore } from "@/store/useFavoritesStore";
+
+interface Character {
+  name: string;
+  height: string;
+  mass: string;
+  hair_color: string;
+  skin_color: string;
+  eye_color: string;
+  birth_year: string;
+  gender: string;
+  homeworld: string;
+  films: string[];
+  species: string[];
+  vehicles: string[];
+  starships: string[];
+  created: string;
+  edited: string;
+  url: string;
+}
+
+const Page = () => {
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [nextPage, setNextPage] = useState<string | null>(null);
+  const [previousPage, setPreviousPage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const router = useRouter();
+  const debouncedValue = useDebounce(searchTerm, 500);
+
+  const { favorites, addFavorite, removeFavorite, isFavorite, loadFavorites } =
+    useFavoritesStore();
+
+  const getPlanetDetails = async (planetUrl: string) => {
+    try {
+      const response = await fetch(planetUrl);
+      const data = await response.json();
+      return data.name;
+    } catch (error) {
+      console.error(
+        `Error fetching planet details: ${(error as Error).message}`
+      );
+      return "Unknown";
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+  }, [loadFavorites]);
+
+  const performSearch = async (query: string) => {
+    setLoading(true);
+    const response = await searchCharacters(query);
+    if (response.results) {
+      const updatedCharacters = await Promise.all(
+        response.results.map(async (character) => {
+          const planetName = await getPlanetDetails(character.homeworld);
+          return { ...character, homeworld: planetName };
+        })
+      );
+      setCharacters(updatedCharacters);
+      setNextPage(response.next);
+      setPreviousPage(response.previous);
+      setCurrentPage(1);
+      setTotalPages(Math.ceil(response.count / 10)); // Calculate total pages
+    }
+    setLoading(false);
+  };
+
+  const loadCharacters = async (pageNumber: number) => {
+    setLoading(true);
+    const response = await fetchCharactersRes(pageNumber);
+    if (response) {
+      const updatedCharacters = await Promise.all(
+        response.results.map(async (character) => {
+          const planetName = await getPlanetDetails(character.homeworld);
+          return { ...character, homeworld: planetName };
+        })
+      );
+      setCharacters(updatedCharacters);
+      setNextPage(response.next);
+      setPreviousPage(response.previous);
+      setCurrentPage(pageNumber);
+      setTotalPages(Math.ceil(response.count / 10)); // Calculate total pages
+    }
+    setLoading(false);
+  };
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handlePagination = (url: string | null) => {
+    if (url) {
+      const urlParams = new URLSearchParams(url.split("?")[1]);
+      const pageNumber = urlParams.get("page");
+      if (pageNumber) {
+        loadCharacters(Number(pageNumber));
+      }
+    }
+  };
+
+  // Function to handle adding/removing a character from favorites
+  const handleFavorite = (character: Character) => {
+    if (isFavorite(character.url)) {
+      removeFavorite(character.url); // Remove from favorites
+    } else {
+      addFavorite(character); // Add to favorites
+    }
+  };
+
+  const handleDetailPage = (characterUrl: string) => {
+    const characterId = characterUrl.split("/").filter(Boolean).pop();
+    if (characterId) {
+      router.push(`/character/${encodeURIComponent(characterId)}`);
+    }
+  };
+
+  useEffect(() => {
+    if (debouncedValue) {
+      performSearch(debouncedValue);
+    } else {
+      loadCharacters(1);
+    }
+  }, [debouncedValue]);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <div className="container mx-auto p-4">
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search Characters..."
+          className="p-2 border rounded-md w-full"
+          value={searchTerm}
+          onChange={handleSearch}
         />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+      </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 ">
+        {loading
+          ? Array(5)
+              .fill(0)
+              .map((_, index) => <SkeletonCard key={index} />)
+          : characters.map((character) => (
+              <CharacterCard
+                type="grid"
+                key={character.name}
+                character={character}
+                isFavorite={isFavorite(character.url)} // Check if character is in favorites
+                onToggleFavorite={() => handleFavorite(character)}
+                onViewDetails={handleDetailPage}
+              />
+            ))}
+      </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex sm:justify-start md:justify-end overflow-auto mt-2">
+          <nav aria-label="Page navigation example">
+            <ul className="inline-flex -space-x-px text-base">
+              {previousPage && (
+                <li>
+                  <a
+                    href="#"
+                    onClick={() => handlePagination(previousPage)}
+                    className="flex items-center justify-center px-4 h-10 ms-0 leading-tight text-gray-500 bg-white border border-e-0 border-gray-300 rounded-s-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    Previous
+                  </a>
+                </li>
+              )}
+
+              <div className="flex justify-center space-x-2 overflow-x-auto">
+                {Array.from({ length: totalPages }, (_, index) => (
+                  <li key={index + 1}>
+                    <a
+                      href="#"
+                      onClick={() => loadCharacters(index + 1)}
+                      className={`flex items-center justify-center px-4 h-10 leading-tight ${
+                        currentPage === index + 1
+                          ? "text-blue-600 bg-blue-50"
+                          : "text-gray-500 bg-white border border-gray-300"
+                      } rounded-md hover:bg-blue-100 hover:text-blue-700 dark:bg-gray-800 dark:border-gray-700 dark:text-white`}
+                    >
+                      {index + 1}
+                    </a>
+                  </li>
+                ))}
+              </div>
+
+              {nextPage && (
+                <li>
+                  <a
+                    href="#"
+                    onClick={() => handlePagination(nextPage)}
+                    className="flex items-center justify-center px-4 h-10 leading-tight text-gray-500 bg-white border border-gray-300 rounded-e-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white"
+                  >
+                    Next
+                  </a>
+                </li>
+              )}
+            </ul>
+          </nav>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
     </div>
   );
-}
+};
+
+export default Page;

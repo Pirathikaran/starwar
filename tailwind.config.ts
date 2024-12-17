@@ -4,7 +4,9 @@ export default {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./stories/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    './.storybook/**/*.{js,jsx,ts,tsx}', // Make sure Storybook is included
   ],
   theme: {
     extend: {
